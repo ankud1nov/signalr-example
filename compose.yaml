@@ -1,0 +1,7 @@
+﻿services:
+  signalrexample:
+    image: signalrexample
+    build:
+      context: .
+      dockerfile: SignalrExample/Dockerfile
+

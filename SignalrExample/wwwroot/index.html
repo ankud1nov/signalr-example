@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SignalR Demo Chat</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1c1c2e; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+
+  /* --- Шапка (авторизация) --- */
+  #header { background: #2b2b3d; padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #3a3a50; flex-shrink: 0; flex-wrap: wrap; }
+  #header input { background: #3a3a50; border: none; border-radius: 8px; padding: 7px 12px; color: #e0e0e0; font-size: 14px; width: 130px; }
+  #header input::placeholder { color: #888; }
+  #loginBtn { background: #5865f2; border: none; border-radius: 8px; padding: 7px 16px; color: #fff; cursor: pointer; font-size: 14px; }
+  #loginBtn:hover { background: #4752c4; }
+  #statusBadge { font-size: 12px; padding: 4px 10px; border-radius: 12px; background: #3a3a50; color: #888; }
+  #statusBadge.ok { background: #1e3a2f; color: #4caf50; }
+  #statusBadge.err { background: #3a1e1e; color: #f44336; }
+  #userInfo { font-size: 13px; color: #aaa; margin-left: auto; }
+  #myConnId { font-size: 11px; color: #666; }
+
+  /* --- Переключатель хаба --- */
+  #hubSwitch { display: flex; gap: 6px; align-items: center; }
+  #hubSwitch label { font-size: 12px; color: #888; }
+  #hubSelect { background: #3a3a50; border: none; border-radius: 8px; padding: 5px 10px; color: #e0e0e0; font-size: 13px; cursor: pointer; }
+
+  /* --- Основной лэйаут --- */
+  #app { display: flex; flex: 1; overflow: hidden; }
+
+  /* --- Левая панель: группы и пользователи --- */
+  #sidebar { width: 220px; background: #232336; border-right: 1px solid #3a3a50; display: flex; flex-direction: column; flex-shrink: 0; }
+  #sidebar h3 { padding: 12px 14px 6px; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+  #groupList { flex: 1; overflow-y: auto; padding: 4px 0; }
+  .groupItem { padding: 8px 14px; cursor: pointer; border-radius: 8px; margin: 2px 6px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .groupItem:hover { background: #2b2b40; }
+  .groupItem.active { background: #5865f2; color: #fff; }
+  .groupItem .badge { font-size: 10px; background: #5865f2; color: #fff; border-radius: 10px; padding: 1px 6px; }
+  .groupItem.active .badge { background: rgba(255,255,255,.3); }
+  #addGroupRow { padding: 8px 10px; display: flex; gap: 6px; }
+  #newGroupInput { flex: 1; background: #3a3a50; border: none; border-radius: 8px; padding: 6px 10px; color: #e0e0e0; font-size: 13px; }
+  #addGroupBtn { background: #5865f2; border: none; border-radius: 8px; padding: 6px 10px; color: #fff; cursor: pointer; font-size: 13px; }
+
+  #onlineList { max-height: 160px; overflow-y: auto; padding: 4px 0; border-top: 1px solid #3a3a50; }
+  .onlineItem { padding: 6px 14px; font-size: 13px; color: #aaa; display: flex; flex-direction: column; gap: 1px; }
+  .onlineItem .connId { font-size: 10px; color: #555; font-family: monospace; }
+  .onlineItem:hover { background: #2b2b40; cursor: pointer; }
+
+  /* --- Правая панель: чат --- */
+  #chatPanel { flex: 1; display: flex; flex-direction: column; }
+  #chatTitle { padding: 10px 16px; background: #2b2b3d; font-weight: 600; font-size: 15px; border-bottom: 1px solid #3a3a50; display: flex; align-items: center; gap: 8px; }
+  #chatTitle span { font-size: 12px; color: #888; font-weight: 400; }
+
+  #messages { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .msg { display: flex; flex-direction: column; max-width: 70%; }
+  .msg.own { align-self: flex-end; }
+  .msg.other { align-self: flex-start; }
+  .msg.system { align-self: center; max-width: 90%; }
+  .msgBubble { padding: 8px 12px; border-radius: 14px; font-size: 14px; line-height: 1.4; word-break: break-word; }
+  .msg.own .msgBubble { background: #5865f2; color: #fff; border-bottom-right-radius: 4px; }
+  .msg.other .msgBubble { background: #2b2b40; color: #e0e0e0; border-bottom-left-radius: 4px; }
+  .msg.system .msgBubble { background: #1e1e2e; color: #888; font-size: 12px; text-align: center; border-radius: 10px; }
+  .msgMeta { font-size: 11px; color: #666; margin-top: 2px; padding: 0 4px; }
+  .msg.own .msgMeta { text-align: right; }
+
+  /* --- Панель ввода --- */
+  #inputArea { padding: 10px 16px; background: #2b2b3d; border-top: 1px solid #3a3a50; display: flex; flex-direction: column; gap: 8px; }
+  #targetRow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #targetRow label { font-size: 12px; color: #888; }
+  #targetSelect { background: #3a3a50; border: none; border-radius: 8px; padding: 5px 10px; color: #e0e0e0; font-size: 13px; cursor: pointer; }
+  #targetInput { background: #3a3a50; border: none; border-radius: 8px; padding: 5px 10px; color: #e0e0e0; font-size: 13px; flex: 1; }
+  #targetInput::placeholder { color: #666; }
+  #sendRow { display: flex; gap: 8px; }
+  #msgInput { flex: 1; background: #3a3a50; border: none; border-radius: 20px; padding: 10px 16px; color: #e0e0e0; font-size: 14px; outline: none; }
+  #msgInput::placeholder { color: #666; }
+  #sendBtn { background: #5865f2; border: none; border-radius: 50%; width: 40px; height: 40px; color: #fff; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  #sendBtn:hover { background: #4752c4; }
+  #sendBtn:disabled { background: #3a3a50; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<!-- Шапка -->
+<div id="header">
+  <input id="usernameInput" type="text" placeholder="Логин" value="user1">
+  <input id="passwordInput" type="password" placeholder="Пароль" value="pass1">
+  <button id="loginBtn" onclick="login()">Войти</button>
+  <div id="hubSwitch">
+    <label>Хаб:</label>
+    <select id="hubSelect" onchange="reconnect()">
+      <option value="chat">ChatHub (авторизованный)</option>
+      <option value="typed">TypedChatHub (анонимный)</option>
+    </select>
+  </div>
+  <span id="statusBadge">Не подключён</span>
+  <div id="userInfo" style="display:none">
+    <div id="myUsername"></div>
+    <div id="myConnId"></div>
+  </div>
+</div>
+
+<!-- Основная область -->
+<div id="app">
+
+  <!-- Левая панель -->
+  <div id="sidebar">
+    <h3>Группы</h3>
+    <div id="groupList">
+      <div class="groupItem active" data-group="__all__" onclick="selectGroup(this)">
+        📢 Все
+      </div>
+    </div>
+    <div id="addGroupRow">
+      <input id="newGroupInput" type="text" placeholder="Название группы">
+      <button id="addGroupBtn" onclick="joinGroup()">+</button>
+    </div>
+    <h3 style="border-top:1px solid #3a3a50; padding-top:10px">Онлайн</h3>
+    <div id="onlineList"></div>
+  </div>
+
+  <!-- Правый чат -->
+  <div id="chatPanel">
+    <div id="chatTitle">📢 Все <span>broadcast</span></div>
+    <div id="messages"></div>
+    <div id="inputArea">
+      <div id="targetRow">
+        <label>Кому:</label>
+        <select id="targetSelect" onchange="updateTarget()">
+          <option value="all">Всем</option>
+          <option value="user">Пользователю (connectionId)</option>
+          <option value="group">В группу</option>
+        </select>
+        <input id="targetInput" type="text" placeholder="connectionId или имя группы" style="display:none">
+      </div>
+      <div id="sendRow">
+        <input id="msgInput" type="text" placeholder="Сообщение..." onkeydown="if(event.key==='Enter') sendMessage()">
+        <button id="sendBtn" onclick="sendMessage()" disabled>➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let connection = null;
+  let token = null;
+  let currentUser = null;
+  let myConnectionId = null;
+  let currentGroup = '__all__';
+  let joinedGroups = new Set();
+  let onlineUsers = {}; // connectionId → username
+
+  // ---------- Авторизация ----------
+
+  async function login() {
+    const username = document.getElementById('usernameInput').value.trim();
+    const password = document.getElementById('passwordInput').value.trim();
+    if (!username || !password) return alert('Введите логин и пароль');
+
+    try {
+      const resp = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (!resp.ok) { alert('Неверный логин или пароль'); return; }
+      const data = await resp.json();
+      token = data.token;
+      currentUser = data.username;
+      document.getElementById('myUsername').textContent = '👤 ' + currentUser;
+      document.getElementById('userInfo').style.display = 'block';
+      await connectHub();
+    } catch (e) {
+      setStatus('Ошибка входа', 'err');
+    }
+  }
+
+  // ---------- SignalR подключение ----------
+
+  async function connectHub() {
+    if (connection) {
+      try { await connection.stop(); } catch {}
+    }
+
+    const hubName = document.getElementById('hubSelect').value;
+    const hubPath = hubName === 'chat' ? '/hubs/chat' : '/hubs/typed-chat';
+
+    // Для авторизованного хаба передаём токен в query string (стандартный способ для WS)
+    const url = token && hubName === 'chat' ? `${hubPath}?access_token=${token}` : hubPath;
+
+    connection = new signalR.HubConnectionBuilder()
+      .withUrl(url)
+      .withAutomaticReconnect()
+      .build();
+
+    // Подписки на события от сервера
+    connection.on('ReceiveMessage', onReceiveMessage);
+    connection.on('UserConnected', onUserConnected);
+    connection.on('UserDisconnected', onUserDisconnected);
+    connection.on('UserJoinedGroup', onUserJoinedGroup);
+    connection.on('UserLeftGroup', onUserLeftGroup);
+
+    connection.onreconnecting(() => setStatus('Переподключение...', 'err'));
+    connection.onreconnected(id => { myConnectionId = id; setStatus('Подключён', 'ok'); });
+    connection.onclose(() => setStatus('Отключён', 'err'));
+
+    try {
+      await connection.start();
+      myConnectionId = connection.connectionId;
+      document.getElementById('myConnId').textContent = '🔗 ' + myConnectionId;
+      setStatus('Подключён', 'ok');
+      document.getElementById('sendBtn').disabled = false;
+
+      // Восстанавливаем членство в группах после переподключения
+      for (const g of joinedGroups) {
+        await connection.invoke('JoinGroup', g);
+      }
+
+      addSystemMessage(`Подключён к ${hubName === 'chat' ? 'ChatHub' : 'TypedChatHub'} как ${currentUser ?? 'аноним'}`);
+    } catch (e) {
+      setStatus('Ошибка подключения', 'err');
+      addSystemMessage('Ошибка: ' + e.message);
+    }
+  }
+
+  async function reconnect() {
+    if (connection?.state === 'Connected') await connectHub();
+  }
+
+  // ---------- Приём сообщений ----------
+
+  function onReceiveMessage(msg) {
+    // msg: { user, text, group, timestamp }
+    const isOwn = msg.user === currentUser;
+    addMessage(msg.user, msg.text, msg.group, msg.timestamp, isOwn ? 'own' : 'other');
+  }
+
+  function onUserConnected(connId, user) {
+    onlineUsers[connId] = user;
+    renderOnlineList();
+    addSystemMessage(`${user} подключился`);
+  }
+
+  function onUserDisconnected(connId, user) {
+    delete onlineUsers[connId];
+    renderOnlineList();
+    addSystemMessage(`${user} отключился`);
+  }
+
+  function onUserJoinedGroup(connId, user, group) {
+    addSystemMessage(`${user} вошёл в группу «${group}»`);
+  }
+
+  function onUserLeftGroup(connId, user, group) {
+    addSystemMessage(`${user} вышел из группы «${group}»`);
+  }
+
+  // ---------- Отправка сообщений ----------
+
+  async function sendMessage() {
+    if (!connection || connection.state !== 'Connected') return;
+    const text = document.getElementById('msgInput').value.trim();
+    if (!text) return;
+
+    const target = document.getElementById('targetSelect').value;
+    const targetVal = document.getElementById('targetInput').value.trim();
+
+    try {
+      if (target === 'all') {
+        await connection.invoke('SendToAll', text);
+      } else if (target === 'user') {
+        if (!targetVal) { alert('Укажите connectionId получателя'); return; }
+        await connection.invoke('SendToUser', targetVal, text);
+      } else if (target === 'group') {
+        const group = targetVal || currentGroup;
+        if (group === '__all__') { alert('Выберите или введите группу'); return; }
+        await connection.invoke('SendToGroup', group, text);
+      }
+      document.getElementById('msgInput').value = '';
+    } catch (e) {
+      addSystemMessage('Ошибка отправки: ' + e.message);
+    }
+  }
+
+  // ---------- Группы ----------
+
+  async function joinGroup() {
+    const name = document.getElementById('newGroupInput').value.trim();
+    if (!name || !connection || connection.state !== 'Connected') return;
+    if (joinedGroups.has(name)) { selectGroupByName(name); return; }
+
+    try {
+      await connection.invoke('JoinGroup', name);
+      joinedGroups.add(name);
+      addGroupTab(name);
+      document.getElementById('newGroupInput').value = '';
+      selectGroupByName(name);
+    } catch (e) {
+      addSystemMessage('Ошибка входа в группу: ' + e.message);
+    }
+  }
+
+  async function leaveGroup(name) {
+    if (!connection || connection.state !== 'Connected') return;
+    try {
+      await connection.invoke('LeaveGroup', name);
+      joinedGroups.delete(name);
+      removeGroupTab(name);
+      selectGroupByName('__all__');
+    } catch (e) {
+      addSystemMessage('Ошибка выхода из группы: ' + e.message);
+    }
+  }
+
+  function addGroupTab(name) {
+    const list = document.getElementById('groupList');
+    const div = document.createElement('div');
+    div.className = 'groupItem';
+    div.dataset.group = name;
+    div.onclick = () => selectGroup(div);
+    div.innerHTML = `# ${name} <span class="badge" onclick="event.stopPropagation();leaveGroup('${name}')">✕</span>`;
+    list.appendChild(div);
+  }
+
+  function removeGroupTab(name) {
+    const el = document.querySelector(`[data-group="${name}"]`);
+    if (el) el.remove();
+  }
+
+  function selectGroup(el) {
+    document.querySelectorAll('.groupItem').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
+    currentGroup = el.dataset.group;
+    const label = currentGroup === '__all__' ? '📢 Все' : '# ' + currentGroup;
+    const sub = currentGroup === '__all__' ? 'broadcast' : 'группа';
+    document.getElementById('chatTitle').innerHTML = `${label} <span>${sub}</span>`;
+  }
+
+  function selectGroupByName(name) {
+    const el = document.querySelector(`[data-group="${name}"]`);
+    if (el) selectGroup(el);
+  }
+
+  // ---------- Список онлайн ----------
+
+  function renderOnlineList() {
+    const list = document.getElementById('onlineList');
+    list.innerHTML = '';
+    for (const [connId, user] of Object.entries(onlineUsers)) {
+      const div = document.createElement('div');
+      div.className = 'onlineItem';
+      div.title = 'Кликни для отправки сообщения';
+      div.innerHTML = `<span>👤 ${user}</span><span class="connId">${connId}</span>`;
+      div.onclick = () => {
+        document.getElementById('targetSelect').value = 'user';
+        updateTarget();
+        document.getElementById('targetInput').value = connId;
+      };
+      list.appendChild(div);
+    }
+  }
+
+  // ---------- Вспомогательные ----------
+
+  function updateTarget() {
+    const val = document.getElementById('targetSelect').value;
+    const input = document.getElementById('targetInput');
+    input.style.display = val === 'all' ? 'none' : 'block';
+    input.placeholder = val === 'user' ? 'connectionId получателя' : 'имя группы';
+  }
+
+  function setStatus(text, cls) {
+    const badge = document.getElementById('statusBadge');
+    badge.textContent = text;
+    badge.className = 'statusBadge ' + (cls || '');
+  }
+
+  function addMessage(user, text, group, timestamp, type) {
+    const msgs = document.getElementById('messages');
+    const time = timestamp ? new Date(timestamp).toLocaleTimeString() : '';
+    const div = document.createElement('div');
+    div.className = 'msg ' + type;
+    const groupTag = group ? ` → #${group}` : '';
+    div.innerHTML = `
+      <div class="msgBubble">${escHtml(text)}</div>
+      <div class="msgMeta">${escHtml(user)}${groupTag} · ${time}</div>
+    `;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function addSystemMessage(text) {
+    addMessage('', text, null, new Date().toISOString(), 'system');
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>

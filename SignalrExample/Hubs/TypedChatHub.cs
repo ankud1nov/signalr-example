@@ -57,14 +57,12 @@ public class TypedChatHub : Hub<IChatClient>
 
     public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation("TypedHub connected: {ConnectionId}, User: {User}", Context.ConnectionId, GetUserName());
         await Clients.Others.UserConnected(Context.ConnectionId, GetUserName());
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _logger.LogInformation("TypedHub disconnected: {ConnectionId}, User: {User}", Context.ConnectionId, GetUserName());
         await Clients.Others.UserDisconnected(Context.ConnectionId, GetUserName());
         await base.OnDisconnectedAsync(exception);
     }

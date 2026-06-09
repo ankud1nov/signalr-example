@@ -215,6 +215,10 @@
       for (const g of joinedGroups) {
         await connection.invoke('JoinGroup', g);
       }
+      
+      var connectedUsers = await connection.invoke('GetAllUsers');
+      Object.assign(onlineUsers, connectedUsers);
+      renderOnlineList();
 
       addSystemMessage(`Подключён к ${hubName === 'chat' ? 'ChatHub' : 'TypedChatHub'} как ${currentUser ?? 'аноним'}`);
     } catch (e) {

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using SignalrExample.Models;
@@ -12,10 +13,17 @@ namespace SignalrExample.Hubs;
 public class ChatHub : Hub
 {
     private readonly ILogger<ChatHub> _logger;
+    private static readonly ConcurrentDictionary<string, string> ConnectedUsers = new();
 
     public ChatHub(ILogger<ChatHub> logger)
     {
         _logger = logger;
+    }
+    
+    public Task<IReadOnlyDictionary<string, string>> GetAllUsers()
+    {
+        IReadOnlyDictionary<string, string> users = ConnectedUsers.AsReadOnly();
+        return Task.FromResult(users);
     }
 
     // --- Отправка сообщений ---
@@ -59,15 +67,15 @@ public class ChatHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation("Client connected: {ConnectionId}, User: {User}", Context.ConnectionId, GetUserName());
         await Clients.Others.SendAsync("UserConnected", Context.ConnectionId, GetUserName());
+        ConnectedUsers.TryAdd(Context.ConnectionId, GetUserName());
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _logger.LogInformation("Client disconnected: {ConnectionId}, User: {User}", Context.ConnectionId, GetUserName());
         await Clients.Others.SendAsync("UserDisconnected", Context.ConnectionId, GetUserName());
+        ConnectedUsers.Remove(Context.ConnectionId, out _);
         await base.OnDisconnectedAsync(exception);
     }
 

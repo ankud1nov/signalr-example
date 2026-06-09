@@ -20,8 +20,8 @@ public class Program
         // --- SignalR ---
         builder.Services.AddSignalR(options =>
             {
-                options.AddFilter<LoggingHubFilter>();
                 options.AddFilter<ScopeHubFilter>();
+                options.AddFilter<LoggingHubFilter>();
             })
             .AddJsonProtocol(options =>
             {

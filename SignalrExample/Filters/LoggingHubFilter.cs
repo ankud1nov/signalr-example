@@ -22,20 +22,45 @@ public class LoggingHubFilter : IHubFilter
         var methodName = invocationContext.HubMethodName;
         var user = invocationContext.Context.User?.Identity?.Name ?? invocationContext.Context.ConnectionId;
 
-        _logger.LogInformation("[Hub] {Hub}.{Method} called by {User}", hubName, methodName, user);
+        _logger.LogInformation("{Hub}.{Method} called by {User}", hubName, methodName, user);
 
         var start = DateTime.UtcNow;
         try
         {
             var result = await next(invocationContext);
             var elapsed = (DateTime.UtcNow - start).TotalMilliseconds;
-            _logger.LogInformation("[Hub] {Hub}.{Method} completed in {Elapsed}ms", hubName, methodName, elapsed);
+            _logger.LogInformation("{Hub}.{Method} completed in {Elapsed}ms", hubName, methodName, elapsed);
             return result;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[Hub] {Hub}.{Method} threw an exception", hubName, methodName);
+            _logger.LogError(ex, "{Hub}.{Method} threw an exception", hubName, methodName);
             throw;
         }
     }
+
+    public Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
+    {
+        _logger.LogInformation(
+            "Connected. Hub: {HubName}, ConnectionId: {ConnectionId}, User: {User}",
+            context.Hub.GetType().Name,
+            context.Context.ConnectionId,
+            GetUserName(context));
+        return next(context);
+    }
+
+    public Task OnDisconnectedAsync(HubLifetimeContext context, Exception? exception, Func<HubLifetimeContext, Exception?, Task> next)
+    {
+        _logger.LogInformation(
+            "Disconnected. Hub: {HubName}, ConnectionId: {ConnectionId}, User: {User}",
+            context.Hub.GetType().Name,
+            context.Context.ConnectionId,
+            GetUserName(context));
+        return next(context, exception);
+    }
+    
+    /// <summary>
+    /// Наверное стоит сделать при авторизации установку pluginName в Context.User.Identity.Name
+    /// </summary>
+    private string GetUserName(HubLifetimeContext context) => context.Context.User?.Identity?.Name ?? context.Context.ConnectionId;
 }

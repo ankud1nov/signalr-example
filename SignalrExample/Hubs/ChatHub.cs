@@ -9,7 +9,7 @@ namespace SignalrExample.Hubs;
 /// Базовый Hub с нетипизированными клиентскими вызовами через строковые имена методов.
 /// Требует авторизации (JWT токен).
 /// </summary>
-[Authorize]
+[Authorize(AuthenticationSchemes = "Bearer")]
 public class ChatHub : Hub
 {
     private readonly ILogger<ChatHub> _logger;
@@ -20,6 +20,10 @@ public class ChatHub : Hub
         _logger = logger;
     }
     
+    [HubMethodName("getAllUsers")]
+    [EndpointName("getAllUsers")]
+    [Tags("UsersAccess")]
+    [EndpointSummary("Получить список всех пользователей чата.")]
     public Task<IReadOnlyDictionary<string, string>> GetAllUsers()
     {
         IReadOnlyDictionary<string, string> users = ConnectedUsers.AsReadOnly();
@@ -33,6 +37,7 @@ public class ChatHub : Hub
     {
         var msg = new ChatMessage(GetUserName(), message, null, DateTime.UtcNow);
         await Clients.All.SendAsync("ReceiveMessage", msg);
+        HubException? exception = new HubException();
     }
 
     /// <summary>Отправляет сообщение конкретному пользователю по его connectionId.</summary>

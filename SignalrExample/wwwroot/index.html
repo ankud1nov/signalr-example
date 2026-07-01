@@ -216,7 +216,7 @@
         await connection.invoke('JoinGroup', g);
       }
       
-      var connectedUsers = await connection.invoke('GetAllUsers');
+      var connectedUsers = await connection.invoke('getAllUsers');
       Object.assign(onlineUsers, connectedUsers);
       renderOnlineList();
 

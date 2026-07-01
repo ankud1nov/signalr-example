@@ -46,6 +46,7 @@ public class LoggingHubFilter : IHubFilter
             context.Hub.GetType().Name,
             context.Context.ConnectionId,
             GetUserName(context));
+
         return next(context);
     }
 
